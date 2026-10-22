@@ -35,6 +35,7 @@ export default function App() {
   const [speaking, setSpeaking] = useState(true);
   const [heat, setHeat] = useState(24);
   const [isInterrupting, setIsInterrupting] = useState(false);
+  const [interruptedSide, setInterruptedSide] = useState(null);
   const [translationBusy, setTranslationBusy] = useState(false);
 
   // ── Change-mind mode ──
@@ -53,6 +54,8 @@ export default function App() {
   const recognitionRef = useRef(null);
   const demoTimerRef = useRef(null);
   const transcriptEndRef = useRef(null);
+  const inputRef = useRef(null);
+  const changeMindInputRef = useRef(null);
   const messagesRef = useRef([]);
   const remoteInfoRef = useRef({ name: '', lang: '' });
   const myInfoRef = useRef({ role: 'a', name: '', lang: 'en-US' });
@@ -127,14 +130,14 @@ export default function App() {
       }
 
       case 'message': {
-        // Translate the received message into our language
         const myLangNow = myInfoRef.current.lang;
         setHeat((h) =>
           Math.min(100, Math.max(0, h + (data.tone === 'heated' ? 18 : data.tone === 'sharp' ? 10 : data.changeMind ? -18 : -2)))
         );
 
-        // Add message immediately with translating indicator
         const msgId = makeMessageId();
+        const hasDirectTranslation = Boolean(data.translatedText);
+
         const initialMsg = {
           id: msgId,
           kind: 'speech',
@@ -143,8 +146,8 @@ export default function App() {
           sourceLang: data.sourceLang,
           sourceLangLabel: getLang(data.sourceLang).label,
           sourceText: data.text,
-          translatedText: '',
-          translating: true,
+          translatedText: data.translatedText || '',
+          translating: !hasDirectTranslation,
           tone: data.tone || 'normal',
           changeMind: !!data.changeMind,
           time: data.time || timeNow(),
@@ -152,25 +155,31 @@ export default function App() {
 
         setMessages((prev) => [...prev, initialMsg].slice(-MAX_MESSAGES));
 
-        // Translate into our language
-        translateText(data.text, data.sourceLang, myLangNow, apiLang).then((result) => {
-          const translated = result.success
-            ? result.translatedText
-            : `⚠ Translation unavailable — original: "${data.text}"`;
-          const failed = !result.success;
-
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === msgId
-                ? { ...m, translatedText: translated, translating: false, translationFailed: failed }
-                : m
-            )
-          );
-
-          if (speakingRef.current && !failed) {
-            speak(translated, myLangNow);
+        if (hasDirectTranslation) {
+          if (speakingRef.current) {
+            speak(data.translatedText, myLangNow);
           }
-        });
+        } else {
+          // Translate into our language if sender didn't provide one
+          translateText(data.text, data.sourceLang, myLangNow, apiLang).then((result) => {
+            const translated = result.success
+              ? result.translatedText
+              : `⚠ Translation unavailable — original: "${data.text}"`;
+            const failed = !result.success;
+
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === msgId
+                  ? { ...m, translatedText: translated, translating: false, translationFailed: failed }
+                  : m
+              )
+            );
+
+            if (speakingRef.current && !failed) {
+              speak(translated, myLangNow);
+            }
+          });
+        }
 
         if (data.interrupt) {
           cancelSpeech();
@@ -185,18 +194,24 @@ export default function App() {
         setListening(false);
         setHeat((h) => Math.min(100, h + 16));
         setIsInterrupting(true);
+        setInterruptedSide(myInfoRef.current.role);
         addMessage({ kind: 'event', side: data.side, text: `${data.name} cut in.` });
-        setTimeout(() => setIsInterrupting(false), 1300);
+        setTimeout(() => {
+          setIsInterrupting(false);
+          setInterruptedSide(null);
+        }, 1500);
         break;
       }
 
       case 'change-mind': {
         setHeat((h) => Math.max(0, h - 24));
+        addMessage({ kind: 'event', side: data.side, text: `${data.name} changed their mind.` });
 
         if (data.revisedText) {
-          // Change-of-mind with revised statement
           const myLangNow = myInfoRef.current.lang;
           const msgId = makeMessageId();
+          const hasDirectTranslation = Boolean(data.translatedText);
+
           const initial = {
             id: msgId,
             kind: 'change-mind-statement',
@@ -204,33 +219,37 @@ export default function App() {
             name: data.name,
             sourceLang: data.sourceLang,
             sourceText: data.revisedText,
-            translatedText: '',
-            translating: true,
+            translatedText: data.translatedText || '',
+            translating: !hasDirectTranslation,
             replyTo: data.replyTo || null,
             time: data.time || timeNow(),
           };
 
           setMessages((prev) => [...prev, initial].slice(-MAX_MESSAGES));
 
-          translateText(data.revisedText, data.sourceLang, myLangNow, apiLang).then((result) => {
-            const translated = result.success
-              ? result.translatedText
-              : `⚠ Translation unavailable — original: "${data.revisedText}"`;
-
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === msgId
-                  ? { ...m, translatedText: translated, translating: false, translationFailed: !result.success }
-                  : m
-              )
-            );
-
-            if (speakingRef.current && result.success) {
-              speak(translated, myLangNow);
+          if (hasDirectTranslation) {
+            if (speakingRef.current) {
+              speak(data.translatedText, myLangNow);
             }
-          });
-        } else {
-          addMessage({ kind: 'event', side: data.side, text: `${data.name} changed their mind.` });
+          } else {
+            translateText(data.revisedText, data.sourceLang, myLangNow, apiLang).then((result) => {
+              const translated = result.success
+                ? result.translatedText
+                : `⚠ Translation unavailable — original: "${data.revisedText}"`;
+
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === msgId
+                    ? { ...m, translatedText: translated, translating: false, translationFailed: !result.success }
+                    : m
+                )
+              );
+
+              if (speakingRef.current && result.success) {
+                speak(translated, myLangNow);
+              }
+            });
+          }
         }
         break;
       }
@@ -513,9 +532,19 @@ export default function App() {
     recognitionRef.current?.stop?.();
     setListening(false);
     setIsInterrupting(true);
+    setInterruptedSide(role === 'a' ? 'b' : 'a');
     setHeat((h) => Math.min(100, h + 16));
     addMessage({ kind: 'event', side: role, text: `${name} interrupts. The floor changes sides.` });
-    setTimeout(() => setIsInterrupting(false), 1300);
+    
+    // Auto-focus input so user can type immediately
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
+
+    setTimeout(() => {
+      setIsInterrupting(false);
+      setInterruptedSide(null);
+    }, 1500);
 
     if (mode !== 'demo' && peerManagerRef.current?.isConnected()) {
       peerManagerRef.current.send({ type: 'interrupt', side: role, name });
@@ -532,6 +561,7 @@ export default function App() {
     setChangeMindTarget(lastMsg || null);
     setChangeMindMode(true);
     setChangeMindDraft('');
+    setTimeout(() => changeMindInputRef.current?.focus(), 50);
   }, [mode, typingSide, myRole]);
 
   // ── Change mind: send revised statement ──
@@ -564,6 +594,13 @@ export default function App() {
       ? result.translatedText
       : 'Translation unavailable — original preserved.';
 
+    const replyContext = changeMindTarget
+      ? {
+          sourceText: changeMindTarget.sourceText,
+          translatedText: changeMindTarget.translatedText,
+        }
+      : null;
+
     // Add change-of-mind statement
     const msgId = makeMessageId();
     addMessage({
@@ -574,8 +611,9 @@ export default function App() {
       sourceLang: fromLang,
       sourceText: changeMindDraft,
       translatedText: translated,
+      translating: false,
       translationFailed: !result.success,
-      replyTo: changeMindTarget?.sourceText || null,
+      replyTo: replyContext,
       time: timeNow(),
     });
 
@@ -587,7 +625,8 @@ export default function App() {
         name,
         sourceLang: fromLang,
         revisedText: changeMindDraft,
-        replyTo: changeMindTarget?.sourceText || null,
+        translatedText: result.success ? result.translatedText : null,
+        replyTo: replyContext,
         time: timeNow(),
       });
     }
@@ -638,6 +677,65 @@ export default function App() {
     recognitionRef.current = recognition;
     recognition.start();
   }, [listening, mode, typingSide, myLang, notify, translateAndSend]);
+
+  // ── Retry translation ──
+  const handleRetryTranslation = useCallback(async (msgId) => {
+    const msg = messagesRef.current.find((m) => m.id === msgId);
+    if (!msg || !msg.sourceText) return;
+
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId ? { ...m, translating: true, translationFailed: false } : m
+      )
+    );
+
+    const isDemo = mode === 'demo';
+    const toLang = isDemo
+      ? (msg.side === 'a' ? 'es-ES' : 'en-US')
+      : (msg.side === myRole ? (remoteInfoRef.current.lang || partnerLang) : myLang);
+
+    const result = await retryTranslation(msg.sourceText, msg.sourceLang, toLang, apiLang);
+    const translated = result.success
+      ? result.translatedText
+      : `⚠ Translation retry failed — original: "${msg.sourceText}"`;
+
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId
+          ? {
+              ...m,
+              translatedText: translated,
+              translating: false,
+              translationFailed: !result.success,
+            }
+          : m
+      )
+    );
+
+    if (speakingRef.current && result.success) {
+      speak(result.translatedText, toLang);
+    }
+  }, [mode, myRole, partnerLang, myLang, speak]);
+
+  // ── Reset demo ──
+  const resetDemo = useCallback(() => {
+    if (demoTimerRef.current) {
+      clearInterval(demoTimerRef.current);
+      demoTimerRef.current = null;
+    }
+    cancelSpeech();
+    setDemoPlaying(false);
+    setMessages([]);
+    setHeat(24);
+    setIsInterrupting(false);
+    setInterruptedSide(null);
+  }, []);
+
+  // ── Exit demo ──
+  const exitDemo = useCallback(() => {
+    resetDemo();
+    setMode('setup');
+  }, [resetDemo]);
 
   // ── Copy room code ──
   const copyRoom = useCallback(async () => {
@@ -865,7 +963,7 @@ export default function App() {
           </button>
           <button
             className="text-btn"
-            onClick={mode === 'demo' ? () => setMode('setup') : leaveRoom}
+            onClick={mode === 'demo' ? exitDemo : leaveRoom}
           >
             {mode === 'demo' ? 'Join someone' : 'Leave room'}{' '}
             <ArrowUpRight size={15} />
@@ -936,7 +1034,7 @@ export default function App() {
             {messages.length > 0 && (
               <button
                 className="demo-reset"
-                onClick={() => { setMessages([]); setHeat(24); }}
+                onClick={resetDemo}
                 title="Reset demo"
               >
                 <RotateCcw size={14} /> Reset
@@ -960,6 +1058,15 @@ export default function App() {
           person={local}
           isLocal
           isDemo={mode === 'demo'}
+          statusLabel={
+            listening
+              ? 'LISTENING'
+              : interruptedSide === local.side
+              ? 'INTERRUPTED'
+              : translationBusy
+              ? 'TRANSLATING'
+              : null
+          }
           active={listening || isInterrupting}
           onLangChange={setMyLang}
           language={myLang}
@@ -993,7 +1100,12 @@ export default function App() {
           person={partner}
           isLocal={false}
           isDemo={mode === 'demo'}
-          active={isInterrupting}
+          statusLabel={
+            interruptedSide === partner.side
+              ? 'INTERRUPTED'
+              : null
+          }
+          active={isInterrupting && interruptedSide === partner.side}
           onLangChange={setPartnerLang}
           language={partnerLang}
           languages={LANGUAGES}
@@ -1042,6 +1154,7 @@ export default function App() {
                 key={message.id}
                 message={message}
                 localSide={mode === 'demo' ? typingSide : local.side}
+                onRetry={handleRetryTranslation}
               />
             ))
           )}
@@ -1094,6 +1207,7 @@ export default function App() {
               onSubmit={(e) => { e.preventDefault(); handleChangeMindSend(); }}
             >
               <input
+                ref={changeMindInputRef}
                 value={changeMindDraft}
                 onChange={(e) => setChangeMindDraft(e.target.value)}
                 placeholder="Write your revised position…"
@@ -1135,6 +1249,7 @@ export default function App() {
                 {listening ? <MicOff size={18} /> : <Mic size={18} />}
               </button>
               <input
+                ref={inputRef}
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder={

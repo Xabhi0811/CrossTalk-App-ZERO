@@ -8,6 +8,7 @@ export function PersonPanel({
   isLocal,
   isDemo,
   active,
+  statusLabel,
   language,
   onLangChange,
   languages,
@@ -17,11 +18,12 @@ export function PersonPanel({
 }) {
   const displayName = isDemo ? person.name : isLocal ? name : person.name;
   const langObj = getLang(language || person.lang);
+  const displayStatus = statusLabel || (active ? (isLocal ? 'SPEAKING' : 'INTERRUPTED') : null);
 
   return (
     <article
       className={`person-panel ${isLocal ? 'is-local' : 'is-remote'} ${
-        active ? 'person-active' : ''
+        active || displayStatus ? 'person-active' : ''
       }`}
     >
       <div className="person-head">
@@ -86,9 +88,9 @@ export function PersonPanel({
           <span />
         </span>
         <span className="language-caption">{langObj.label}</span>
-        {active && (
+        {displayStatus && (
           <span className="talking-pill">
-            <span /> {isLocal && active ? 'SPEAKING' : 'INTERRUPTED'}
+            <span /> {displayStatus}
           </span>
         )}
       </div>

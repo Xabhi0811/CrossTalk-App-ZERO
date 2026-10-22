@@ -46,11 +46,17 @@ async function translateWithMyMemory(text, sourceLang, targetLang) {
       return { success: false, translatedText: null, error: 'No translation returned' };
     }
 
-    // Check if MyMemory returned the same text (sometimes happens for unsupported pairs)
-    const cleaned = result.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+    // Clean HTML entities returned by MyMemory
+    const cleaned = result
+      .replace(/&quot;/g, '"')
+      .replace(/&#039;/g, "'")
+      .replace(/&#39;/g, "'")
+      .replace(/&apos;/g, "'")
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&nbsp;/g, ' ');
 
-    // MyMemory sometimes returns the input text unchanged for unsupported language pairs
-    // We detect this but still return it since it could be a valid same-text translation
     return { success: true, translatedText: cleaned, error: null };
   } catch (err) {
     clearTimeout(timeout);

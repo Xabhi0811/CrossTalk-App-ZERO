@@ -7,6 +7,7 @@
  * Check if speech recognition is supported.
  */
 export function isSpeechRecognitionSupported() {
+  if (typeof window === 'undefined') return false;
   return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 }
 
@@ -14,6 +15,7 @@ export function isSpeechRecognitionSupported() {
  * Check if speech synthesis is supported.
  */
 export function isSpeechSynthesisSupported() {
+  if (typeof window === 'undefined') return false;
   return 'speechSynthesis' in window;
 }
 
@@ -103,24 +105,39 @@ export function createRecognition(options) {
 export function speakText(text, lang, options = {}) {
   if (!isSpeechSynthesisSupported() || !text) return null;
 
-  // Cancel any ongoing speech
-  window.speechSynthesis.cancel();
+  try {
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
 
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = lang;
-  utterance.rate = options.rate || 1.02;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = lang;
+    utterance.rate = options.rate || 1.02;
 
-  // Try to find a suitable voice for the language
-  const voices = window.speechSynthesis.getVoices();
-  const langPrefix = lang.split('-')[0];
-  const matchingVoice = voices.find(v => v.lang === lang) ||
-                        voices.find(v => v.lang.startsWith(langPrefix));
-  if (matchingVoice) {
-    utterance.voice = matchingVoice;
+    // Try to find a suitable voice for the language
+    const voices = window.speechSynthesis.getVoices();
+    if (voices && voices.length > 0) {
+      const langPrefix = lang.split('-')[0].toLowerCase();
+      const matchingVoice =
+        voices.find((v) => v.lang.toLowerCase() === lang.toLowerCase()) ||
+        voices.find((v) => v.lang.toLowerCase().startsWith(langPrefix));
+      if (matchingVoice) {
+        utterance.voice = matchingVoice;
+      }
+    }
+
+    utterance.onerror = (e) => {
+      // Ignore canceled speech events
+      if (e.error !== 'canceled' && e.error !== 'interrupted') {
+        console.warn('Speech synthesis warning:', e.error);
+      }
+    };
+
+    window.speechSynthesis.speak(utterance);
+    return utterance;
+  } catch (err) {
+    console.warn('Speech playback failed:', err);
+    return null;
   }
-
-  window.speechSynthesis.speak(utterance);
-  return utterance;
 }
 
 /**
@@ -128,6 +145,10 @@ export function speakText(text, lang, options = {}) {
  */
 export function cancelSpeech() {
   if (isSpeechSynthesisSupported()) {
-    window.speechSynthesis.cancel();
+    try {
+      window.speechSynthesis.cancel();
+    } catch {
+      /* ignore */
+    }
   }
 }

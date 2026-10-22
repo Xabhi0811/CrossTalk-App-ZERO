@@ -91,7 +91,16 @@ export function createPeerConnection(options) {
 
   function init() {
     try {
-      peer = new Peer(ownId, { debug: 0 });
+      peer = new Peer(ownId, {
+        debug: 0,
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun.cloudflare.com:3478' },
+          ],
+        },
+      });
     } catch (err) {
       onError('Failed to create peer connection. Check your network.');
       return;

@@ -88,7 +88,7 @@ export function Toast({ message }) {
 }
 
 /** Single transcript message. */
-export function TranscriptMessage({ message, localSide }) {
+export function TranscriptMessage({ message, localSide, onRetry }) {
   if (message.kind === 'system') {
     return (
       <div className="system-line">
@@ -120,6 +120,13 @@ export function TranscriptMessage({ message, localSide }) {
 
   if (message.kind === 'change-mind-statement') {
     const local = message.side === localSide;
+    const replyText =
+      typeof message.replyTo === 'object' && message.replyTo !== null
+        ? local
+          ? message.replyTo.sourceText
+          : message.replyTo.translatedText || message.replyTo.sourceText
+        : message.replyTo;
+
     return (
       <article
         className={`message-row ${local ? 'message-local' : 'message-remote'} tone-soft change-mind-msg`}
@@ -135,10 +142,10 @@ export function TranscriptMessage({ message, localSide }) {
             </span>
             <time>{message.time}</time>
           </div>
-          {message.replyTo && (
+          {replyText && (
             <div className="change-mind-context">
               <span className="change-context-label">Reconsidering:</span>
-              <span className="change-context-text">&ldquo;{message.replyTo}&rdquo;</span>
+              <span className="change-context-text">&ldquo;{replyText}&rdquo;</span>
             </div>
           )}
           <div className="message-bubble change-mind-bubble">
@@ -148,8 +155,28 @@ export function TranscriptMessage({ message, localSide }) {
             <span className="translation-icon">
               <span className="change-mind-arrow">↻</span>
             </span>
-            <span>{message.translatedText}</span>
-            <span className="translated-label">REVISED · TRANSLATED</span>
+            <span>
+              {message.translating ? (
+                <span className="translating-indicator">
+                  <span className="mini-spinner" /> Translating…
+                </span>
+              ) : (
+                message.translatedText
+              )}
+            </span>
+            {!message.translating && (
+              <span className="translated-label">
+                {message.translationFailed ? 'ORIGINAL PRESERVED' : 'REVISED · TRANSLATED'}
+              </span>
+            )}
+            {message.translationFailed && (message.onRetry || onRetry) && (
+              <button
+                className="retry-btn"
+                onClick={() => (message.onRetry || onRetry)(message.id)}
+              >
+                Retry
+              </button>
+            )}
           </div>
         </div>
       </article>
@@ -199,8 +226,11 @@ export function TranscriptMessage({ message, localSide }) {
               {message.translationFailed ? 'ORIGINAL PRESERVED' : 'TRANSLATED'}
             </span>
           )}
-          {message.translationFailed && message.onRetry && (
-            <button className="retry-btn" onClick={message.onRetry}>
+          {message.translationFailed && (message.onRetry || onRetry) && (
+            <button
+              className="retry-btn"
+              onClick={() => (message.onRetry || onRetry)(message.id)}
+            >
               Retry
             </button>
           )}
