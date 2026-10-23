@@ -436,9 +436,9 @@ export default function App() {
     const isDemo = mode === 'demo';
     const side = isDemo ? typingSide : myRole;
     const name = isDemo ? (side === 'a' ? 'Alex' : 'Lucía') : myName;
-    const fromLang = isDemo ? (side === 'a' ? 'en-US' : 'es-ES') : myLang;
+    const fromLang = isDemo ? (side === 'a' ? myLang : partnerLang) : myLang;
     const toLang = isDemo
-      ? (side === 'a' ? 'es-ES' : 'en-US')
+      ? (side === 'a' ? partnerLang : myLang)
       : (remoteInfoRef.current.lang || partnerLang);
     const tone = options.tone || (heat > 68 ? 'heated' : heat > 40 ? 'sharp' : 'normal');
 
@@ -574,9 +574,9 @@ export default function App() {
     const isDemo = mode === 'demo';
     const side = isDemo ? typingSide : myRole;
     const name = isDemo ? (side === 'a' ? 'Alex' : 'Lucía') : myName;
-    const fromLang = isDemo ? (side === 'a' ? 'en-US' : 'es-ES') : myLang;
+    const fromLang = isDemo ? (side === 'a' ? myLang : partnerLang) : myLang;
     const toLang = isDemo
-      ? (side === 'a' ? 'es-ES' : 'en-US')
+      ? (side === 'a' ? partnerLang : myLang)
       : (remoteInfoRef.current.lang || partnerLang);
 
     setTranslationBusy(true);
@@ -657,7 +657,7 @@ export default function App() {
       return;
     }
 
-    const lang = mode === 'demo' ? (typingSide === 'a' ? 'en-US' : 'es-ES') : myLang;
+    const lang = mode === 'demo' ? (typingSide === 'a' ? myLang : partnerLang) : myLang;
 
     const recognition = createRecognition({
       lang,
@@ -691,7 +691,7 @@ export default function App() {
 
     const isDemo = mode === 'demo';
     const toLang = isDemo
-      ? (msg.side === 'a' ? 'es-ES' : 'en-US')
+      ? (msg.side === 'a' ? partnerLang : myLang)
       : (msg.side === myRole ? (remoteInfoRef.current.lang || partnerLang) : myLang);
 
     const result = await retryTranslation(msg.sourceText, msg.sourceLang, toLang, apiLang);
@@ -764,17 +764,23 @@ export default function App() {
     setChangeMindMode(false);
   }, []);
 
+  // ── Handle partner language change ──
+  const handlePartnerLangChange = useCallback((newLang) => {
+    setPartnerLang(newLang);
+    remoteInfoRef.current.lang = newLang;
+  }, []);
+
   // ── Derived values ──
   const connected = connectionStatus === CONNECTION_STATUS.CONNECTED;
   const connecting = connectionStatus === CONNECTION_STATUS.CONNECTING;
   const reconnecting = connectionStatus === CONNECTION_STATUS.RECONNECTING;
 
   const partner = mode === 'demo'
-    ? { name: 'Lucía', lang: 'es-ES', side: 'b' }
+    ? { name: 'Lucía', lang: partnerLang, side: 'b' }
     : { name: partnerName || (myRole === 'a' ? 'Partner B' : 'Partner A'), lang: partnerLang, side: myRole === 'a' ? 'b' : 'a' };
 
   const local = mode === 'demo'
-    ? { name: 'Alex', lang: 'en-US', side: 'a' }
+    ? { name: 'Alex', lang: myLang, side: 'a' }
     : { name: myName, lang: myLang, side: myRole };
 
   const heatLabel = heat < 35 ? 'Contained' : heat < 67 ? 'Getting tense' : 'Running hot';
@@ -1106,7 +1112,7 @@ export default function App() {
               : null
           }
           active={isInterrupting && interruptedSide === partner.side}
-          onLangChange={setPartnerLang}
+          onLangChange={handlePartnerLangChange}
           language={partnerLang}
           languages={LANGUAGES}
           name={mode === 'demo' ? 'Lucía' : partnerName}
@@ -1172,13 +1178,13 @@ export default function App() {
               className={typingSide === 'a' ? 'active' : ''}
               onClick={() => setTypingSide('a')}
             >
-              A · Alex / EN
+              A · Alex / {getLang(myLang).short}
             </button>
             <button
               className={typingSide === 'b' ? 'active' : ''}
               onClick={() => setTypingSide('b')}
             >
-              B · Lucía / ES
+              B · Lucía / {getLang(partnerLang).short}
             </button>
           </div>
         )}
@@ -1259,8 +1265,8 @@ export default function App() {
                         getLang(
                           mode === 'demo'
                             ? typingSide === 'a'
-                              ? 'en-US'
-                              : 'es-ES'
+                              ? myLang
+                              : partnerLang
                             : myLang
                         ).label
                       }…`

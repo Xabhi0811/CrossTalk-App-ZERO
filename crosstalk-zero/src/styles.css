@@ -654,29 +654,91 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 }
 
 .language-selector {
-  display: flex;
+  position: relative;
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-  color: #9c9f90;
   border: 1px solid #37392f;
-  border-radius: 5px;
-  padding: 6px 5px;
-  max-width: 128px;
+  border-radius: 6px;
+  background: #191a16;
+  color: #9c9f90;
+  min-width: 116px;
+  max-width: 140px;
+  height: 32px;
+  transition: border-color .15s ease, background-color .15s ease, box-shadow .15s ease;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
-.language-selector > select {
+.language-selector:hover {
+  border-color: #555848;
+  color: #c7c9bd;
+}
+
+.language-selector:focus-within {
+  border-color: var(--lime);
+  box-shadow: 0 0 0 1px #d7fa6935;
+}
+
+.language-selector svg {
+  pointer-events: none !important;
+  color: inherit;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.language-selector .selector-icon {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.language-selector .selector-arrow {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.language-selector > select,
+.language-selector > select.language-select {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  padding: 0 24px 0 26px;
+  margin: 0;
   background: transparent;
   border: 0;
   outline: 0;
   color: #c7c9bd;
-  font-size: 10px;
-  max-width: 77px;
+  font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
   appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  box-sizing: border-box;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.language-selector > select:disabled { opacity: 1; }
-.language-selector > svg:last-child { pointer-events: none; }
-.language-selector select option { background: #191a16; color: #eee; }
+.language-selector > select:focus {
+  outline: none;
+}
+
+.language-selector select option {
+  background: #191a16;
+  color: #f0f0e8;
+  font-size: 12px;
+  padding: 8px 12px;
+}
 
 .person-languages {
   display: flex;
@@ -1451,8 +1513,10 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   .person-head { gap: 7px; padding: 12px 10px; }
   .avatar { width: 30px; height: 30px; }
   .person-name-block > span { font-size: 7px; }
-  .language-selector { padding: 5px; max-width: 94px; }
-  .language-selector > select { font-size: 9px; max-width: 60px; }
+  .language-selector { min-width: 86px; max-width: 110px; height: 28px; }
+  .language-selector .selector-icon { left: 6px; }
+  .language-selector .selector-arrow { right: 6px; }
+  .language-selector > select { font-size: 9px; padding: 0 18px 0 20px; }
   .person-languages { padding: 15px 10px; gap: 7px; }
   .language-caption { font-size: 10px; }
   .person-foot { padding: 9px 10px; }

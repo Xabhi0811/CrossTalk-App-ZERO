@@ -59,12 +59,12 @@ export function PersonPanel({
           </span>
         </div>
         <div className="language-selector">
-          <Globe2 size={13} />
+          <Globe2 size={13} className="selector-icon" />
           <select
+            className="language-select"
             aria-label={`${isLocal ? 'Your' : "Partner's"} language`}
             value={language || person.lang}
             onChange={(e) => onLangChange(e.target.value)}
-            disabled={!isLocal || isDemo}
           >
             {languages.map((l) => (
               <option value={l.code} key={l.code}>
@@ -72,7 +72,7 @@ export function PersonPanel({
               </option>
             ))}
           </select>
-          <ChevronDown size={13} />
+          <ChevronDown size={13} className="selector-arrow" />
         </div>
       </div>
 
