@@ -1,4 +1,3 @@
-import React from 'react';
 import { ShieldCheck, Check, X, RotateCcw, Swords } from 'lucide-react';
 
 /** Brand logo component. */

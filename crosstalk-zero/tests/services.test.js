@@ -8,10 +8,8 @@ import {
   makeMessageId,
   timeNow,
   DEMO_LINES,
-  MAX_MESSAGES,
-  CONNECTION_STATUS,
 } from '../src/constants.js';
-import { translateText, retryTranslation } from '../src/services/translation.js';
+import { translateText } from '../src/services/translation.js';
 import { isSpeechRecognitionSupported, isSpeechSynthesisSupported, cancelSpeech } from '../src/services/speech.js';
 import { createPeerConnection } from '../src/services/peer.js';
 

@@ -1,4 +1,3 @@
-import React from 'react';
 import { Globe2, ChevronDown, ShieldCheck } from 'lucide-react';
 import { getLang } from '../constants.js';
 

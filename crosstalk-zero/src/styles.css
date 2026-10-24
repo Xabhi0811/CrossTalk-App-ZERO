@@ -161,50 +161,6 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   display: inline-block;
 }
 
-/* Theme toggle button */
-.theme-toggle-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 20px;
-  background: var(--panel);
-  border: 1px solid var(--line-strong);
-  color: var(--text);
-  font: 10px var(--mono);
-  font-weight: 700;
-  letter-spacing: .05em;
-  transition: all 0.2s ease;
-  box-shadow: var(--shadow-sm);
-}
-
-.theme-toggle-btn:hover {
-  background: var(--panel-hover);
-  border-color: var(--primary);
-  transform: translateY(-1px);
-}
-
-.theme-palette-preview {
-  display: inline-flex;
-  gap: 2px;
-  align-items: center;
-}
-
-.theme-dot-white {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #F8F3F0;
-  border: 1.5px solid #014BAA;
-}
-
-.theme-dot-blue {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #014BAA;
-  border: 1.5px solid #F8F3F0;
-}
 
 /* ── Setup hero ── */
 .setup-hero {
