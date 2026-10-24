@@ -16,9 +16,10 @@ export function PersonPanel({
   onNameChange,
   connectionStatus,
 }) {
-  const displayName = isDemo ? person.name : isLocal ? name : person.name;
+  const displayName = isLocal ? name : person.name;
   const langObj = getLang(language || person.lang);
   const displayStatus = statusLabel || (active ? (isLocal ? 'SPEAKING' : 'INTERRUPTED') : null);
+  const roleLetter = (person.side || (isLocal ? 'a' : 'b')).toUpperCase();
 
   return (
     <article
@@ -27,8 +28,8 @@ export function PersonPanel({
       }`}
     >
       <div className="person-head">
-        <div className={`avatar ${isLocal ? 'avatar-a' : 'avatar-b'}`}>
-          {(displayName || (isLocal ? 'A' : 'B')).charAt(0).toUpperCase()}
+        <div className={`avatar ${roleLetter === 'B' ? 'avatar-b' : 'avatar-a'}`}>
+          {(displayName || roleLetter).charAt(0).toUpperCase()}
           <span
             className="avatar-status"
             title={
@@ -41,21 +42,22 @@ export function PersonPanel({
           />
         </div>
         <div className="person-name-block">
-          {isLocal && !isDemo ? (
+          {isLocal ? (
             <input
               aria-label="Your display name"
               className="name-edit"
               value={name}
               onChange={(e) => onNameChange(e.target.value)}
+              placeholder="Enter your name"
               maxLength={28}
             />
           ) : (
-            <b>{displayName}</b>
+            <b>{displayName || 'Partner'}</b>
           )}
           <span>
             {isLocal ? 'YOUR SIDE' : 'THE OTHER SIDE'}{' '}
             <span className="panel-side-dot">·</span>{' '}
-            {isLocal ? 'A' : 'B'}
+            {roleLetter}
           </span>
         </div>
         <div className="language-selector">

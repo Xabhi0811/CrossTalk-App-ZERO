@@ -19,7 +19,13 @@ export default function App() {
   const [myRole, setMyRole] = useState('a');
 
   // ── Identity ──
-  const [myName, setMyName] = useState('');
+  const [myName, setMyName] = useState(() => {
+    try {
+      return localStorage.getItem('crosstalk_name') || '';
+    } catch {
+      return '';
+    }
+  });
   const [myLang, setMyLang] = useState('en-US');
   const [partnerName, setPartnerName] = useState('');
   const [partnerLang, setPartnerLang] = useState('es-ES');
@@ -66,6 +72,27 @@ export default function App() {
   useEffect(() => { myInfoRef.current = { role: myRole, name: myName, lang: myLang }; }, [myRole, myName, myLang]);
   useEffect(() => { speakingRef.current = speaking; }, [speaking]);
 
+  // ── Save name to localStorage ──
+  useEffect(() => {
+    if (myName) {
+      try {
+        localStorage.setItem('crosstalk_name', myName);
+      } catch { /* ignore */ }
+    }
+  }, [myName]);
+
+  // ── Auto-read room code from URL params ──
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const roomParam = params.get('room');
+      if (roomParam) {
+        setRoomCode(roomParam.toUpperCase().slice(0, 8));
+        setMyRole('b');
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   // ── Cleanup on unmount ──
   useEffect(() => () => {
     if (demoTimerRef.current) clearInterval(demoTimerRef.current);
@@ -107,15 +134,33 @@ export default function App() {
 
     switch (data.type) {
       case 'hello': {
-        remoteInfoRef.current = { name: data.name || 'Guest', lang: data.lang || 'en-US' };
-        setPartnerName(data.name || 'Guest');
+        const remoteName = data.name || 'Guest';
+        remoteInfoRef.current = { name: remoteName, lang: data.lang || 'en-US' };
+        setPartnerName(remoteName);
         setPartnerLang(data.lang || 'en-US');
         setConnectionStatus(CONNECTION_STATUS.CONNECTED);
         setConnectionText('Peer-to-peer connected');
         addMessage({
           kind: 'system',
-          text: `${data.name || 'Your partner'} joined in ${getLang(data.lang).label}.`,
+          text: `${remoteName} joined in ${getLang(data.lang).label}.`,
         });
+        // Immediately reply with hello-ack so the connecting peer receives our latest name and language
+        peerManagerRef.current?.send({
+          type: 'hello-ack',
+          name: myInfoRef.current.name || 'Guest',
+          lang: myInfoRef.current.lang,
+          side: myInfoRef.current.role,
+        });
+        break;
+      }
+
+      case 'hello-ack': {
+        const remoteName = data.name || 'Guest';
+        remoteInfoRef.current = { name: remoteName, lang: data.lang || 'en-US' };
+        setPartnerName(remoteName);
+        setPartnerLang(data.lang || 'en-US');
+        setConnectionStatus(CONNECTION_STATUS.CONNECTED);
+        setConnectionText('Peer-to-peer connected');
         break;
       }
 
@@ -129,7 +174,22 @@ export default function App() {
         break;
       }
 
+      case 'name-change': {
+        const newName = data.name || 'Guest';
+        remoteInfoRef.current.name = newName;
+        setPartnerName(newName);
+        addMessage({
+          kind: 'system',
+          text: `Partner updated their name to "${newName}".`,
+        });
+        break;
+      }
+
       case 'message': {
+        if (data.name && data.name !== remoteInfoRef.current.name) {
+          remoteInfoRef.current.name = data.name;
+          setPartnerName(data.name);
+        }
         const myLangNow = myInfoRef.current.lang;
         setHeat((h) =>
           Math.min(100, Math.max(0, h + (data.tone === 'heated' ? 18 : data.tone === 'sharp' ? 10 : data.changeMind ? -18 : -2)))
@@ -327,7 +387,17 @@ export default function App() {
         name: myName,
       });
     }
-  }, [myLang, mode, myName]);
+  }, [myLang, mode]); // intentionally exclude myName so name changes go through their own effect
+
+  // ── Notify partner of name change ──
+  useEffect(() => {
+    if (mode === 'live' && peerManagerRef.current?.isConnected()) {
+      peerManagerRef.current.send({
+        type: 'name-change',
+        name: myName,
+      });
+    }
+  }, [myName, mode]);
 
   // ── Enter demo mode ──
   const enterDemo = useCallback(() => {
@@ -739,9 +809,10 @@ export default function App() {
 
   // ── Copy room code ──
   const copyRoom = useCallback(async () => {
+    const shareUrl = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
     try {
-      await navigator.clipboard.writeText(roomCode);
-      notify('Room code copied. Send it to your partner.');
+      await navigator.clipboard.writeText(shareUrl);
+      notify(`Invite link copied! Room: ${roomCode}`);
     } catch {
       notify(`Share this room code: ${roomCode}`);
     }
@@ -841,7 +912,7 @@ export default function App() {
               <input
                 value={myName}
                 onChange={(e) => setMyName(e.target.value)}
-                placeholder="What should we call you?"
+                placeholder="Enter your name"
                 maxLength={28}
               />
             </label>
@@ -1077,7 +1148,7 @@ export default function App() {
           onLangChange={setMyLang}
           language={myLang}
           languages={LANGUAGES}
-          name={mode === 'demo' ? 'Alex' : myName}
+          name={myName || (mode === 'demo' ? 'Alex' : '')}
           onNameChange={setMyName}
           connectionStatus={connectionStatus}
         />
@@ -1115,7 +1186,7 @@ export default function App() {
           onLangChange={handlePartnerLangChange}
           language={partnerLang}
           languages={LANGUAGES}
-          name={mode === 'demo' ? 'Lucía' : partnerName}
+          name={partnerName || (mode === 'demo' ? 'Lucía' : '')}
           onNameChange={setPartnerName}
           connectionStatus={connectionStatus}
         />

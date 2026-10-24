@@ -40,10 +40,16 @@ export function createPeerConnection(options) {
   function wireConnection(conn) {
     connection = conn;
 
-    conn.on('open', () => {
+    const handleOpen = () => {
       reconnectAttempts = 0;
       onConnect(conn);
-    });
+    };
+
+    if (conn.open) {
+      handleOpen();
+    } else {
+      conn.on('open', handleOpen);
+    }
 
     conn.on('data', (data) => {
       if (data && typeof data === 'object') {

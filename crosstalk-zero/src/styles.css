@@ -143,15 +143,22 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   gap: 7px;
 }
 
-.lime-text { color: var(--primary); }
+.lime-text { color: #1a8a4a; font-weight: 600; }
 
-.live-dot, .connection-dot, .privacy-dot {
+.live-dot, .privacy-dot {
   height: 7px;
   width: 7px;
   border-radius: 50%;
-  background: var(--primary);
+  background: #1a8a4a;
   display: inline-block;
-  box-shadow: 0 0 10px var(--primary-glow);
+  box-shadow: 0 0 10px rgba(26, 138, 74, 0.45);
+}
+.connection-dot {
+  height: 7px;
+  width: 7px;
+  border-radius: 50%;
+  background: var(--muted-light);
+  display: inline-block;
 }
 
 /* Theme toggle button */
@@ -479,7 +486,10 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   font-size: 11px;
 }
 
-.connection-dot.on { background: var(--primary); }
+.connection-dot.on {
+  background: #1a8a4a;
+  box-shadow: 0 0 10px rgba(26, 138, 74, 0.45);
+}
 .connection-dot.off { background: var(--muted-light); box-shadow: none; }
 .connection-dot.reconnecting {
   background: #e8a422;
@@ -564,8 +574,18 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--primary);
-  box-shadow: 0 0 0 4px var(--primary-glow);
+  background: #1a8a4a;
+  box-shadow: 0 0 0 4px rgba(26, 138, 74, 0.25);
+  animation: pulseGreen 2s infinite;
+}
+
+@keyframes pulseGreen {
+  0%, 100% {
+    box-shadow: 0 0 0 4px rgba(26, 138, 74, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(26, 138, 74, 0.08);
+  }
 }
 
 /* ── Heat card ── */
@@ -1186,12 +1206,13 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   margin-top: 6px;
   font-size: 11px;
   line-height: 1.55;
-  color: var(--muted);
+  color: #1a8a4a;
   overflow-wrap: anywhere;
+  font-weight: 500;
 }
 
 .translation-icon {
-  color: var(--primary);
+  color: #1a8a4a;
   display: flex;
   flex-shrink: 0;
   margin-top: 2px;
@@ -1199,20 +1220,32 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 
 .translated-label {
   white-space: nowrap;
-  color: var(--muted-light);
+  color: #2aa866;
   font: 7px var(--mono);
   letter-spacing: .05em;
   margin-left: 4px;
   margin-top: 3px;
+  opacity: 0.85;
 }
 
 .message-local .translation-line { justify-content: flex-end; }
+
+/* On local (blue) bubbles, keep translation readable */
+.message-local .translation-line {
+  color: #a8f0c8;
+}
+.message-local .translation-icon {
+  color: #a8f0c8;
+}
+.message-local .translated-label {
+  color: #a8f0c8;
+}
 
 .translating-indicator {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--muted);
+  color: #1a8a4a;
   font-style: italic;
 }
 
