@@ -29,6 +29,31 @@ export function makeRoomCode() {
   return Math.random().toString(36).slice(2, 7).toUpperCase();
 }
 
+/** Extract and sanitize a room code from raw input, URL, or query string. */
+export function extractRoomCode(input) {
+  if (!input || typeof input !== 'string') return '';
+  let str = input.trim();
+
+  // Try extracting from query parameter 'room'
+  const match = str.match(/[?&]room=([a-zA-Z0-9_-]+)/i);
+  if (match && match[1]) {
+    str = match[1];
+  } else if (/^https?:\/\//i.test(str)) {
+    try {
+      const url = new URL(str);
+      const r = url.searchParams.get('room');
+      str = r || '';
+    } catch {
+      str = '';
+    }
+  } else if (str.toLowerCase().startsWith('http')) {
+    str = '';
+  }
+
+  // Clean to uppercase alphanumeric up to 8 characters
+  return str.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 8);
+}
+
 /** Format current time as HH:MM. */
 export function timeNow() {
   return new Intl.DateTimeFormat('en', { hour: '2-digit', minute: '2-digit' }).format(new Date());

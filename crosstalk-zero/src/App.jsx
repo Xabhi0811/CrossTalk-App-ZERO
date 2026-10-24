@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowDownLeft, ArrowUpRight, AudioLines, Check, CircleHelp,
-  Copy, Globe2, Languages, Mic, MicOff, MessageSquareText,
+  Copy, Globe2, Languages, Link, Mic, MicOff, MessageSquareText,
   RotateCcw, ShieldCheck, Swords, Volume2, VolumeX, Zap, X,
 } from 'lucide-react';
 
-import { LANGUAGES, getLang, apiLang, makeRoomCode, timeNow, makeMessageId, DEMO_LINES, MAX_MESSAGES, CONNECTION_STATUS } from './constants.js';
+import { LANGUAGES, getLang, apiLang, makeRoomCode, extractRoomCode, timeNow, makeMessageId, DEMO_LINES, MAX_MESSAGES, CONNECTION_STATUS } from './constants.js';
 import { translateText, retryTranslation } from './services/translation.js';
 import { createPeerConnection } from './services/peer.js';
 import { createRecognition, speakText, cancelSpeech, isSpeechRecognitionSupported, isSpeechSynthesisSupported } from './services/speech.js';
@@ -17,6 +17,8 @@ export default function App() {
   const [mode, setMode] = useState('setup'); // 'setup' | 'demo' | 'live'
   const [roomCode, setRoomCode] = useState('');
   const [myRole, setMyRole] = useState('a');
+  const [copiedId, setCopiedId] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   // ── Identity ──
   const [myName, setMyName] = useState(() => {
@@ -87,7 +89,7 @@ export default function App() {
       const params = new URLSearchParams(window.location.search);
       const roomParam = params.get('room');
       if (roomParam) {
-        setRoomCode(roomParam.toUpperCase().slice(0, 8));
+        setRoomCode(extractRoomCode(roomParam));
         setMyRole('b');
       }
     } catch { /* ignore */ }
@@ -332,10 +334,11 @@ export default function App() {
   // ── Start a room ──
   const startRoom = useCallback((role) => {
     if (!myName.trim()) { notify('Add your name first.'); return; }
-    if (role === 'b' && !roomCode.trim()) { notify('Enter the room code your partner shared.'); return; }
+    const cleanedCode = extractRoomCode(roomCode);
+    if (role === 'b' && !cleanedCode) { notify('Enter the room code your partner shared.'); return; }
     if (!window.RTCPeerConnection) { notify('This browser does not support peer-to-peer connections.'); return; }
 
-    const room = (roomCode || makeRoomCode()).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+    const room = cleanedCode || makeRoomCode();
     setRoomCode(room);
     setMyRole(role);
     setMode('live');
@@ -808,15 +811,47 @@ export default function App() {
   }, [resetDemo]);
 
   // ── Copy room code ──
-  const copyRoom = useCallback(async () => {
+  const copyRoomCode = useCallback(async () => {
+    if (!roomCode) return;
+    try {
+      await navigator.clipboard.writeText(roomCode);
+      setCopiedId(true);
+      setTimeout(() => setCopiedId(false), 1500);
+      notify(`Room ID ${roomCode} copied!`);
+    } catch {
+      notify(`Room ID: ${roomCode}`);
+    }
+  }, [roomCode, notify]);
+
+  // ── Copy invite link ──
+  const copyInviteLink = useCallback(async () => {
+    if (!roomCode) return;
     const shareUrl = `${window.location.origin}${window.location.pathname}?room=${roomCode}`;
     try {
       await navigator.clipboard.writeText(shareUrl);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 1500);
       notify(`Invite link copied! Room: ${roomCode}`);
     } catch {
-      notify(`Share this room code: ${roomCode}`);
+      notify(`Share this link: ${shareUrl}`);
     }
   }, [roomCode, notify]);
+
+  // ── Room input handlers ──
+  const handleRoomChange = useCallback((e) => {
+    const val = e.target.value;
+    if (val.includes('http') || val.includes('room=')) {
+      setRoomCode(extractRoomCode(val));
+    } else {
+      setRoomCode(val.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 8));
+    }
+  }, []);
+
+  const handleRoomPaste = useCallback((e) => {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData)?.getData('text') || '';
+    setRoomCode(extractRoomCode(text));
+  }, []);
 
   // ── Leave room ──
   const leaveRoom = useCallback(() => {
@@ -960,9 +995,12 @@ export default function App() {
               Room code
               <input
                 value={roomCode}
-                onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                placeholder="e.g. 7KQ2M"
-                maxLength={8}
+                onChange={handleRoomChange}
+                onPaste={handleRoomPaste}
+                placeholder="e.g. 7KQ2M or paste invite link"
+                maxLength={100}
+                autoComplete="off"
+                spellCheck="false"
               />
             </label>
           )}
@@ -1024,8 +1062,21 @@ export default function App() {
           ) : (
             <>
               <span className="room-id">ROOM {roomCode}</span>
-              <button className="icon-btn copy-btn" onClick={copyRoom} title="Copy room code">
-                <Copy size={14} />
+              <button
+                className="icon-btn copy-btn"
+                onClick={copyRoomCode}
+                title="Copy Room ID"
+                aria-label="Copy Room ID"
+              >
+                {copiedId ? <Check size={14} color="#1a8a4a" /> : <Copy size={14} />}
+              </button>
+              <button
+                className="icon-btn copy-btn"
+                onClick={copyInviteLink}
+                title="Copy Invite Link"
+                aria-label="Copy Invite Link"
+              >
+                {copiedLink ? <Check size={14} color="#1a8a4a" /> : <Link size={14} />}
               </button>
             </>
           )}

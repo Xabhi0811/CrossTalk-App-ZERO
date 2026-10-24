@@ -5,6 +5,7 @@ import {
   getLang,
   apiLang,
   makeRoomCode,
+  extractRoomCode,
   makeMessageId,
   timeNow,
   DEMO_LINES,
@@ -47,6 +48,19 @@ describe('Constants & Language Configuration', () => {
     assert.strictEqual(code1.length, 5);
     assert.strictEqual(code1, code1.toUpperCase());
     assert.match(code1, /^[A-Z0-9]{5}$/);
+  });
+
+  test('extractRoomCode cleanly extracts codes from plain text, urls, and params', () => {
+    assert.strictEqual(extractRoomCode('UZHJR'), 'UZHJR');
+    assert.strictEqual(extractRoomCode('uzhjr'), 'UZHJR');
+    assert.strictEqual(extractRoomCode('http://localhost:5173/?room=UZHJR'), 'UZHJR');
+    assert.strictEqual(extractRoomCode('http://192.168.1.5:5173/?room=7KQ2M'), '7KQ2M');
+    assert.strictEqual(extractRoomCode('https://example.com/crosstalk?lang=es&room=ABC12#top'), 'ABC12');
+    assert.strictEqual(extractRoomCode('?room=TEST8'), 'TEST8');
+    assert.strictEqual(extractRoomCode('  abc-456  '), 'ABC456');
+    assert.strictEqual(extractRoomCode('http://'), '');
+    assert.strictEqual(extractRoomCode(''), '');
+    assert.strictEqual(extractRoomCode(null), '');
   });
 
   test('makeMessageId returns unique IDs', () => {
