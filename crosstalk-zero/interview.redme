@@ -1,0 +1,929 @@
+# CrossTalk - Interview Guide
+
+This document explains the CrossTalk project in simple words. It is written for
+an interview, so it explains both **what the user sees** and **what happens
+inside the code**.
+
+> Important: CrossTalk does not have a custom backend such as Express,
+> Node.js API routes, MongoDB, or a server-side message database. It is a
+> client-side React application. It uses PeerJS/WebRTC for browser-to-browser
+> communication and the public MyMemory API only for translation.
+
+---
+
+## 1. One-minute project explanation
+
+CrossTalk lets two people have a conversation when they speak different
+languages.
+
+1. Person A creates a room and receives a short room code.
+2. Person B joins with that code or with an invite URL.
+3. Each person chooses their own language.
+4. A person types a sentence or speaks into the microphone.
+5. Speech is converted to text by the browser.
+6. The sender's browser translates the text using MyMemory.
+7. The original text and translated text are shown in the transcript.
+8. The translated text can be read aloud by the browser.
+9. The message and conversation events are sent directly between the two
+   browsers through a PeerJS/WebRTC data channel.
+
+The application also models a real argument: users can interrupt, see a heat
+meter, and explicitly say that they changed their mind.
+
+---
+
+## 2. What problem does the project solve?
+
+Normal translation tools are designed for short, polite exchanges. CrossTalk
+is designed for a more realistic conversation where people may:
+
+- interrupt one another;
+- become tense;
+- speak at different speeds;
+- need to see the exact original wording;
+- change their position and make that change visible.
+
+The project is therefore both a translation tool and a conversation
+visualization experiment.
+
+---
+
+## 3. Technology stack
+
+| Technology | Why it is used |
+|---|---|
+| React 18 | Builds the user interface with components and state |
+| Vite 6 | Development server, hot reload, and production bundling |
+| JavaScript/JSX | Application implementation |
+| PeerJS | Easier wrapper around WebRTC peer connections |
+| WebRTC data channel | Direct text/event communication between browsers |
+| STUN servers | Help browsers discover a route through NAT/firewalls |
+| MyMemory API | External text translation |
+| Web Speech API | Browser speech-to-text and text-to-speech |
+| lucide-react | Icons |
+| Node `node:test` | Unit tests without an additional test framework |
+| Vercel/static hosting | Hosting the generated frontend files |
+
+Important distinction:
+
+- **PeerJS's signaling service** helps peers find each other.
+- **STUN servers** help with WebRTC network discovery.
+- After connection, application messages travel through the direct WebRTC
+  data channel whenever the network allows it.
+- There is no CrossTalk application server storing conversations.
+
+---
+
+## 4. Project structure
+
+```text
+crosstalk-zero/
+├── index.html
+├── package.json
+├── package-lock.json
+├── vite.config.js
+├── vercel.json
+├── README.md
+├── interview.redme
+├── tests/
+│   └── services.test.js
+└── src/
+    ├── main.jsx
+    ├── App.jsx
+    ├── constants.js
+    ├── styles.css
+    ├── components/
+    │   ├── PersonPanel.jsx
+    │   └── SharedComponents.jsx
+    └── services/
+        ├── peer.js
+        ├── speech.js
+        └── translation.js
+```
+
+### File responsibilities
+
+#### `index.html`
+
+This is the HTML shell. It contains the `root` element where React is mounted,
+page metadata, the title, and font imports.
+
+#### `src/main.jsx`
+
+This is the React entry point:
+
+```jsx
+createRoot(document.getElementById('root')).render(
+  <React.StrictMode><App /></React.StrictMode>
+);
+```
+
+It imports the CSS and renders the `App` component.
+
+#### `src/App.jsx`
+
+This is the main orchestrator. It contains:
+
+- setup, demo, and live modes;
+- most application state;
+- room creation and joining;
+- PeerJS callbacks;
+- message translation and sending;
+- incoming message handling;
+- speech recognition and speech synthesis calls;
+- heat, interruption, and changed-mind behavior;
+- the main page layout.
+
+It is intentionally the central state machine for this prototype.
+
+#### `src/constants.js`
+
+Contains shared configuration and small utilities:
+
+- supported languages;
+- conversion from browser language codes to API language codes;
+- room code generation and extraction;
+- message IDs and timestamps;
+- demo conversation data;
+- maximum transcript size;
+- connection status names.
+
+#### `src/services/peer.js`
+
+Encapsulates PeerJS. `App.jsx` does not need to know the low-level PeerJS
+event wiring. It receives a small manager with:
+
+- `send(data)`;
+- `destroy()`;
+- `isConnected()`.
+
+#### `src/services/translation.js`
+
+Encapsulates MyMemory requests. It validates empty text, skips the API when
+both languages are the same, rate-limits requests, times out after 10 seconds,
+and cleans HTML entities from the provider response.
+
+#### `src/services/speech.js`
+
+Encapsulates browser speech features:
+
+- feature detection;
+- speech recognition;
+- interim and final transcript callbacks;
+- speech synthesis;
+- stopping current speech.
+
+#### `src/components/PersonPanel.jsx`
+
+Renders one participant card: name, side, language, status, waveform, and
+local/remote privacy information.
+
+#### `src/components/SharedComponents.jsx`
+
+Contains reusable UI components:
+
+- `Brand`;
+- `HelpModal`;
+- `Toast`;
+- `TranscriptMessage`.
+
+`TranscriptMessage` renders system messages, event messages, normal speech, and
+changed-mind messages.
+
+#### `src/styles.css`
+
+Contains the complete visual design, responsive layout, buttons, transcript
+cards, connection indicators, heat bar, and mobile styles.
+
+#### `tests/services.test.js`
+
+Tests utilities and service contracts. It does not run a full browser-to-browser
+conversation because that requires real browser APIs and two peers.
+
+---
+
+## 5. Application modes
+
+`App.jsx` uses one main state variable:
+
+```js
+const [mode, setMode] = useState('setup');
+```
+
+### Setup mode
+
+The user enters their name, chooses a language, chooses a role, and either:
+
+- creates a room as role A; or
+- joins a room as role B.
+
+The user can also open the demo without creating a room.
+
+### Demo mode
+
+Demo mode is local. It does not create a PeerJS connection or call another
+browser. It plays the predefined `DEMO_LINES` array, showing Alex speaking
+English and Lucía speaking Spanish.
+
+It demonstrates:
+
+- normal messages;
+- an interruption;
+- heat changes;
+- a concession;
+- a final resolution.
+
+### Live mode
+
+Live mode creates a PeerJS manager and displays the actual conversation. The
+two browsers communicate using the room-derived peer IDs.
+
+---
+
+## 6. Startup flow from the browser
+
+Here is the top-to-bottom startup flow:
+
+1. The browser requests `index.html`.
+2. Vite serves `/src/main.jsx`.
+3. `main.jsx` imports `App.jsx` and `styles.css`.
+4. React mounts `<App />` into `<div id="root">`.
+5. `App` starts in `setup` mode.
+6. `myName` is restored from `localStorage` key `crosstalk_name`, if present.
+7. The URL is checked for `?room=...`.
+8. If a room query parameter exists:
+   - the room code is sanitized;
+   - the user is automatically changed to role B;
+   - the code is placed in the join input.
+9. React renders the setup screen.
+
+The application does not fetch initial users, messages, or database records.
+There is no login flow.
+
+---
+
+## 7. Creating and joining a room
+
+### Host flow: role A
+
+When the user clicks **Create room**:
+
+1. `startRoom('a')` validates the name.
+2. It checks that the browser supports `RTCPeerConnection`.
+3. It uses the entered code or calls `makeRoomCode()`.
+4. `makeRoomCode()` creates a five-character uppercase alphanumeric code.
+5. The mode changes from `setup` to `live`.
+6. The status changes to `connecting`.
+7. `createPeerConnection()` creates a PeerJS peer using:
+
+   ```text
+   xtalk-<room-code-lowercase>-a
+   ```
+
+8. When PeerJS opens, the host displays “Room ready - waiting for partner”.
+9. The host can copy the code or an invite URL.
+
+### Guest flow: role B
+
+When the user clicks **Join conversation**:
+
+1. `startRoom('b')` validates the name and room code.
+2. The same room code is used to create:
+
+   ```text
+   xtalk-<room-code-lowercase>-b
+   ```
+
+3. After the guest peer opens, it calls `peer.connect()` to the host ID.
+4. PeerJS opens a reliable JSON data connection.
+5. Both sides exchange a `hello` or `hello-ack` payload.
+6. Each side learns the other person's name, language, and role.
+
+### Invite URL flow
+
+An invite URL looks like:
+
+```text
+https://example.com/?room=ABCDE
+```
+
+`extractRoomCode()` accepts a raw code, a query string, or a complete URL. It
+removes non-alphanumeric characters, converts the result to uppercase, and
+limits it to eight characters.
+
+---
+
+## 8. How the frontend connects to the “backend”
+
+There is no custom backend in this project. The frontend connects to three
+external/browser services:
+
+### A. Browser APIs
+
+The frontend directly calls:
+
+- `SpeechRecognition` or `webkitSpeechRecognition` for voice input;
+- `speechSynthesis` for voice output;
+- `localStorage` for the user's own name;
+- `navigator.clipboard` for room code and invite link copying;
+- `RTCPeerConnection` indirectly through PeerJS for P2P communication.
+
+### B. PeerJS/WebRTC
+
+The frontend imports `Peer` in `src/services/peer.js`. PeerJS gives each
+browser a deterministic peer ID based on the room and role.
+
+The connection uses:
+
+- Google STUN servers;
+- Cloudflare STUN;
+- reliable JSON serialization.
+
+After connection, `connection.send(data)` sends plain JavaScript objects over
+the data channel.
+
+### C. MyMemory translation API
+
+The frontend constructs a URL like:
+
+```text
+https://api.mymemory.translated.net/get?q=<text>&langpair=en|es
+```
+
+This is a direct browser request. No CrossTalk backend proxies it.
+
+---
+
+## 9. Complete message data flow
+
+Assume Person A speaks English and Person B selected Spanish.
+
+### Input flow
+
+1. Person A types into the composer, or clicks the microphone.
+2. For microphone input, `createRecognition()` sets the recognition language
+   to `myLang`.
+3. Interim speech results update `draft`.
+4. A final speech result updates `draft` and triggers `translateAndSend()`.
+5. Pressing Enter or clicking Send also calls `translateAndSend()`.
+
+### Sender translation flow
+
+`translateAndSend(text)` determines:
+
+- sender side: A or B;
+- sender name;
+- source language;
+- target language;
+- tone based on heat;
+- whether this is an interruption or changed-mind message.
+
+It immediately adds a local transcript item with `translating: true`. This
+makes the interface feel responsive.
+
+Then `translateText()`:
+
+1. rejects empty text;
+2. returns the same text immediately for identical languages;
+3. maps `en-US` to `en` and `es-ES` to `es`;
+4. waits when necessary to maintain the 1100 ms request gap;
+5. truncates the request to 480 characters;
+6. performs a fetch with a 10-second abort timeout;
+7. parses the provider response;
+8. cleans HTML entities;
+9. returns a standard success/error object.
+
+### Sending over WebRTC
+
+After translation, the sender updates the local transcript and sends an object
+to the partner:
+
+```js
+{
+  type: 'message',
+  side: 'a',
+  name: 'Alex',
+  sourceLang: 'en-US',
+  text: 'Hello',
+  translatedText: 'Hola',
+  tone: 'normal',
+  time: '10:30 PM',
+  interrupt: false,
+  changeMind: false
+}
+```
+
+The translated text is normally sent with the message. This follows the
+project's “translate before broadcast” design.
+
+### Receiver flow
+
+1. PeerJS calls `onData`.
+2. `App.jsx` passes the object to `receiveData(data)`.
+3. `receiveData()` checks `data.type`.
+4. For `message`, it creates a remote transcript item.
+5. If `translatedText` exists, it displays it and optionally speaks it.
+6. If it does not exist, the receiver translates the original text into its
+   own language as a fallback.
+7. The receiver updates heat from the message tone.
+8. The transcript scrolls to the newest message.
+
+### Voice output flow
+
+If voice is enabled:
+
+1. `speak()` checks the current voice setting.
+2. `speakText()` cancels previous speech.
+3. It creates a `SpeechSynthesisUtterance`.
+4. It chooses a voice matching the target language.
+5. It calls `window.speechSynthesis.speak()`.
+
+Voice is generated locally by each browser. Raw microphone audio is not sent
+to the partner.
+
+---
+
+## 10. P2P protocol used by the application
+
+The data channel carries JSON-like objects. The `type` property determines
+which handler runs in `receiveData()`.
+
+### `hello`
+
+Sent when a data channel opens. Shares the sender's name, language, and side.
+
+### `hello-ack`
+
+Reply containing the other side's current name, language, and role.
+
+### `message`
+
+Carries a normal translated statement:
+
+```js
+{
+  type: 'message',
+  side,
+  name,
+  sourceLang,
+  text,
+  translatedText,
+  tone,
+  time,
+  interrupt,
+  changeMind
+}
+```
+
+### `interrupt`
+
+Tells the other browser to stop speech, stop recognition, show an interruption
+event, and increase heat.
+
+### `change-mind`
+
+Carries a revised statement, its translation, and optional context pointing to
+the previous statement.
+
+### `lang-change`
+
+Updates the partner's target/source language in the remote information ref.
+
+### `name-change`
+
+Updates the partner display name.
+
+### `heat`
+
+The current implementation handles a `heat` message, although the main
+message flow mostly updates heat locally from event types.
+
+### `goodbye`
+
+Sent before a user leaves so the partner can show “Your partner left the room.”
+
+---
+
+## 11. Connection and reconnection behavior
+
+Connection states are defined in `CONNECTION_STATUS`:
+
+- `disconnected`;
+- `connecting`;
+- `connected`;
+- `reconnecting`;
+- `error`.
+
+`peer.js` handles:
+
+- host incoming connections;
+- guest outgoing connections;
+- connection open;
+- connection close;
+- PeerJS errors;
+- PeerJS disconnection;
+- reconnection attempts.
+
+The guest retries up to three times. Retry delays increase by two seconds per
+attempt. The host waits for a new incoming connection.
+
+Important errors are converted into understandable messages, for example:
+
+- room not found;
+- room code already active;
+- network issue;
+- failed connection.
+
+---
+
+## 12. Heat meter behavior
+
+Heat is a number from 0 to 100 and starts at 24.
+
+Typical changes in the current code:
+
+- heated message: increases by 18;
+- sharp message: increases by 10;
+- interruption: increases by 16;
+- changed mind: decreases by approximately 22-24;
+- calm exchange: can decrease slightly;
+- all updates are clamped between 0 and 100.
+
+Labels are:
+
+- below 35: `Contained`;
+- 35 through 66: `Getting tense`;
+- 67 or higher: `Running hot`.
+
+Heat also changes speech playback speed. Higher heat makes the browser voice
+slightly faster.
+
+This is a UI heuristic, not machine-learning emotion detection. The code does
+not analyze a person's actual voice volume or emotion.
+
+---
+
+## 13. Interruptions
+
+When a user clicks **Interrupt**:
+
+1. current speech synthesis is cancelled locally;
+2. active speech recognition is stopped;
+3. the local UI shows an interruption event;
+4. the floor changes to the other side;
+5. heat increases;
+6. the input receives focus;
+7. an `interrupt` payload is sent to the partner if connected.
+
+The receiving browser performs the same audio stop and visual update.
+
+The interrupt button does not transmit microphone audio. It transmits an event
+that tells the other browser to stop its local playback.
+
+---
+
+## 14. “I changed my mind” flow
+
+This is a separate conversation workflow:
+
+1. The user clicks **I changed my mind**.
+2. The app searches backward for the user's latest speech message.
+3. That statement is displayed as context.
+4. The user writes a revised position.
+5. The revised position is translated.
+6. A visible change-of-mind event is added.
+7. A special `change-mind-statement` transcript card is added.
+8. The payload is sent to the partner.
+9. The partner renders the same concession context in their language.
+10. Heat is reduced by 24.
+
+The important design idea is that a concession is not silently editing history.
+The original statement remains in the receipt and the revision is shown as a
+new statement.
+
+---
+
+## 15. React state and refs
+
+The most important state values in `App.jsx` are:
+
+| State | Meaning |
+|---|---|
+| `mode` | `setup`, `demo`, or `live` |
+| `roomCode` | Current room identifier |
+| `myRole` | Local side, A or B |
+| `myName`, `partnerName` | Participant names |
+| `myLang`, `partnerLang` | Participant languages |
+| `connectionStatus` | Peer connection state |
+| `messages` | Transcript history, limited to 200 items |
+| `draft` | Current composer text |
+| `listening` | Whether speech recognition is active |
+| `speaking` | Whether translated voice playback is enabled |
+| `heat` | Conversation intensity from 0 to 100 |
+| `isInterrupting` | Temporary interruption UI state |
+| `changeMindMode` | Whether revision composer is open |
+| `translationBusy` | Prevents duplicate sends while translating |
+
+Refs are used for values needed by asynchronous callbacks without waiting for
+React re-renders:
+
+- `peerManagerRef`: current PeerJS manager;
+- `recognitionRef`: current speech recognition instance;
+- `demoTimerRef`: demo interval;
+- `messagesRef`: latest messages for selecting revision context;
+- `remoteInfoRef`: latest partner name and language;
+- `myInfoRef`: latest local role, name, and language;
+- `speakingRef`: latest voice preference inside callbacks.
+
+This avoids stale state problems in PeerJS and speech event handlers.
+
+---
+
+## 16. Error and fallback behavior
+
+The project tries to preserve the user's original text:
+
+- translation failure shows the original in the transcript;
+- failed translations can be retried;
+- translation requests time out after 10 seconds;
+- empty text is rejected;
+- same-language messages do not call the translation API;
+- unsupported speech recognition shows a message and allows typing;
+- microphone permission errors show a toast;
+- missing or unavailable rooms show a connection error;
+- leaving a room destroys PeerJS and stops speech.
+
+The original message is never replaced with an empty translation.
+
+---
+
+## 17. Privacy and security explanation
+
+The project has these privacy properties:
+
+- no user account;
+- no application database;
+- no central conversation history;
+- microphone processing is performed by the browser's speech API;
+- messages are intended to travel peer-to-peer through WebRTC;
+- translation text is sent to MyMemory;
+- the browser stores only the local display name in `localStorage`.
+
+A careful interview answer should not claim that everything is fully private:
+
+- the translation provider receives the text sent for translation;
+- PeerJS signaling is used for discovery;
+- WebRTC connectivity can depend on STUN infrastructure;
+- browser support and network configuration affect behavior.
+
+The Help modal correctly warns users not to use the prototype for urgent,
+legal, or medical conversations because translations can be wrong.
+
+---
+
+## 18. Build and run commands
+
+Run these commands from the inner `crosstalk-zero` directory:
+
+```bash
+npm install
+npm run dev
+npm test
+npm run build
+npm run preview
+```
+
+### What each command does
+
+- `npm install`: installs dependencies from `package-lock.json`.
+- `npm run dev`: starts Vite development mode, normally on port 5173.
+- `npm test`: runs `tests/*.test.js` using Node's built-in test runner.
+- `npm run build`: creates the production bundle in `dist/`.
+- `npm run preview`: serves the production bundle locally.
+
+For best voice-input support, use a Chromium-based browser such as Chrome or
+Edge and grant microphone permission.
+
+---
+
+## 19. Testing approach
+
+The current tests cover:
+
+- supported language configuration;
+- language fallback;
+- API language conversion;
+- room code generation;
+- room code extraction from codes and URLs;
+- message ID generation;
+- timestamp formatting;
+- demo script structure;
+- empty translation validation;
+- same-language translation shortcut;
+- safe speech feature detection in Node;
+- safe speech cancellation;
+- PeerJS service export.
+
+What is not fully covered by the unit tests:
+
+- real browser speech recognition;
+- actual MyMemory network requests;
+- two-browser WebRTC integration;
+- visual rendering;
+- mobile layout.
+
+For a production application, browser integration tests would be useful for
+room creation, joining, message delivery, interruption, and reconnecting.
+
+---
+
+## 20. Deployment flow
+
+The app is a static Vite build:
+
+1. Vercel or another static host receives the repository.
+2. Dependencies are installed.
+3. `npm run build` creates `dist/`.
+4. The host serves `dist/index.html` and bundled assets.
+5. `vercel.json` rewrites routes to `index.html`, which is important for a
+   single-page application.
+6. Browsers load the frontend and then connect to PeerJS/WebRTC and MyMemory
+   directly.
+
+There are no required environment variables or application secrets in the
+current implementation.
+
+---
+
+## 21. Interview questions and short answers
+
+### Q1. Is there a backend?
+
+**Answer:** There is no custom backend. The app is a client-side React/Vite
+SPA. PeerJS/WebRTC handles browser-to-browser communication, and MyMemory is
+an external translation service.
+
+### Q2. How do two users find each other?
+
+**Answer:** Both users derive deterministic PeerJS IDs from the same room code:
+`xtalk-<room>-a` and `xtalk-<room>-b`. The host registers first and the guest
+connects to the host ID.
+
+### Q3. What is the role of PeerJS?
+
+**Answer:** PeerJS wraps WebRTC and simplifies peer creation, connection
+events, data serialization, and reconnection. It is not the application
+database.
+
+### Q4. Where is translation performed?
+
+**Answer:** The sender's browser translates before sending. The translated
+text is included in the P2P message. If it is missing, the receiver performs
+a fallback translation.
+
+### Q5. Does the app send microphone audio?
+
+**Answer:** No. The browser converts speech to text locally through the Web
+Speech API. CrossTalk sends text and event payloads, not raw microphone audio.
+
+### Q6. How does the app handle translation failure?
+
+**Answer:** It preserves the original message, marks the translation as failed,
+shows a retry button, and does not replace the message with blank content.
+
+### Q7. Why are React refs needed?
+
+**Answer:** PeerJS and speech callbacks run asynchronously. Refs such as
+`myInfoRef`, `remoteInfoRef`, and `speakingRef` provide the latest values
+without relying on a possibly stale closure.
+
+### Q8. How does the demo work without another user?
+
+**Answer:** Demo mode skips PeerJS and uses the `DEMO_LINES` array plus a timer.
+It calls the same transcript and speech UI concepts locally.
+
+### Q9. How is an interruption implemented?
+
+**Answer:** The local browser cancels speech and recognition, adds a UI event,
+raises heat, and sends an `interrupt` event. The remote browser receives that
+event and cancels its own local playback.
+
+### Q10. How is the heat meter calculated?
+
+**Answer:** It is a bounded heuristic. Sharp/heated messages and interruptions
+increase heat; calm exchanges and changed-mind messages reduce it. It is not
+an emotion-recognition model.
+
+### Q11. How is room input secured?
+
+**Answer:** Room input is normalized by extracting the `room` query parameter,
+removing non-alphanumeric characters, converting to uppercase, and limiting
+the length. This is input cleanup, not user authentication.
+
+### Q12. What happens when a user changes language?
+
+**Answer:** The local language state changes and a `lang-change` payload is sent
+to the partner. The partner updates the remote language shown in the UI and
+uses the new language for future translation.
+
+### Q13. How is the transcript limited?
+
+**Answer:** New messages are appended and sliced to the last 200 items using
+`MAX_MESSAGES`. This prevents unbounded memory growth during a long session.
+
+### Q14. How would you add another translation provider?
+
+**Answer:** Keep the `translateText()` return contract and replace the
+provider-specific function in `src/services/translation.js`. The rest of the
+application should not need to know provider details.
+
+### Q15. How would you add a new P2P event?
+
+**Answer:** Define a unique `type`, send it through the PeerJS manager, and add
+a matching case in `receiveData()`. Also update UI state and tests for the new
+event.
+
+---
+
+## 22. A good end-to-end explanation in an interview
+
+You can say:
+
+> CrossTalk is a React 18 single-page application built with Vite. It has no
+> custom backend or database. The user opens the setup screen, selects a name,
+> role, and language, and either creates or joins a room. The room code is
+> converted into deterministic PeerJS IDs for side A and side B. PeerJS uses
+> WebRTC to establish a direct JSON data channel between the browsers.
+>
+> When a user types or speaks, the browser first converts speech to text if
+> needed. `App.jsx` sends the text to the translation service abstraction,
+> which calls MyMemory, rate-limits requests, handles timeouts, and preserves
+> the original on failure. The sender renders the message locally and sends
+> the original plus translated text through WebRTC. The receiver handles the
+> payload in `receiveData()`, adds it to the transcript, optionally translates
+> as a fallback, and uses the browser speech-synthesis API to read it aloud.
+>
+> React state controls modes, messages, connection state, heat, interruptions,
+> and concessions. Refs keep asynchronous PeerJS and speech callbacks pointed
+> at the latest participant information. The demo mode uses local scripted
+> data instead of a network connection. The app is deployed as static files,
+> while PeerJS/WebRTC and MyMemory are used at runtime.
+
+---
+
+## 23. Limitations and possible improvements
+
+Current limitations:
+
+- translation depends on a public third-party service;
+- browser speech recognition support is not universal;
+- there is no authentication;
+- room codes are short and are not an access-control system;
+- there is no persistent conversation history;
+- real WebRTC connectivity can fail behind restrictive networks;
+- there are no end-to-end browser integration tests;
+- the main orchestration component is large.
+
+Reasonable future improvements:
+
+1. Split `App.jsx` into hooks such as `useRoom`, `useConversation`, and
+   `useSpeech`.
+2. Add a backend only if accounts, durable history, moderation, or server
+   translation proxying is required.
+3. Add a provider proxy to protect quotas and centralize translation policy.
+4. Add stronger room authentication or one-time invite tokens.
+5. Add Playwright tests using two browser contexts.
+6. Add message schema validation before accepting remote payloads.
+7. Add explicit loading/error states for every async operation.
+8. Add accessibility tests and keyboard navigation coverage.
+
+---
+
+## 24. Final mental model
+
+Remember this simple chain:
+
+```text
+User
+  ↓
+React UI in App.jsx
+  ↓
+Browser speech-to-text (optional)
+  ↓
+Translation service → MyMemory (unless same language)
+  ↓
+Local transcript update
+  ↓
+PeerJS manager
+  ↓
+WebRTC JSON data channel
+  ↓
+Partner's App.jsx receiveData()
+  ↓
+Partner transcript + optional fallback translation
+  ↓
+Browser text-to-speech (optional)
+```
+
+That chain is the complete CrossTalk data flow from the top of the project to
+the bottom.
