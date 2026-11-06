@@ -51,6 +51,10 @@ CrossTalk was engineered from the ground up to solve the **messy middle of an ar
 2. **Audio Interruptibility:** If Participant B clicks **Interrupt** or starts speaking while Participant A's translated voice is playing, synthesis stops instantly on both ends.
 3. **Accountability via Receipts:** Rather than an ephemeral voice stream, every exchange is logged into "The Receipt" timeline with timestamps, language indicators, and tone tags.
 
+
+
+
+
 ---
 
 ## 3. Core Feature Matrix
